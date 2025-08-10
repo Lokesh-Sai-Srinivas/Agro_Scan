@@ -7,10 +7,23 @@ import torch
 
 app = FastAPI()
 
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+app = FastAPI()
+
+# Get frontend URL from environment variable with fallback to default
+frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # React's default port
+    allow_origins=[frontend_url],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

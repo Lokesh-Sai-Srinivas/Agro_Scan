@@ -27,58 +27,87 @@ import {
 
 // Firebase Configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyBqCxduffC1V49__EDBZ9XYMyAbHEBuK0s",
-  // Gemini API Key - Note: In production, move this to environment variables or backend
-  geminiApiKey: "AIzaSyBspqp07U1QvVBXo9FbHKGKkM_OJUXIO4k",
-  authDomain: "agroscan-cc769.firebaseapp.com",
-  projectId: "agroscan-cc769",
-  storageBucket: "agroscan-cc769.firebasestorage.app",
-  messagingSenderId: "551346112804",
-  appId: "1:551346112804:web:c0c6d5d35193e58d58cbb1",
-  measurementId: "G-SN2MV5Y30Z"
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID,
+  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
 };
 
-const appId = 'agroscan-app'; // You can keep this or change it
+// Gemini API Key from environment variables
+const geminiApiKey = process.env.REACT_APP_GEMINI_API_KEY;
+
+// Backend URL from environment variables
+const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
+
+// Create a context for the Gemini AI client
+const GeminiAIContext = React.createContext(null);
 
 // Initialize Firebase
 let app;
 let analytics;
 let auth;
 let db;
-let genAI;
 
+// Initialize Firebase services
 try {
     app = initializeApp(firebaseConfig);
     analytics = getAnalytics(app);
+    auth = getAuth(app);
+    db = getFirestore(app);
     console.log('Firebase initialized successfully');
 } catch (error) {
     console.error('Error initializing Firebase:', error);
 }
 
-try {
-    // Initialize Gemini AI with the API key from firebaseConfig
-    if (!firebaseConfig.geminiApiKey) {
-        console.error('Gemini API key is missing in firebaseConfig');
-    } else {
-        genAI = new GoogleGenerativeAI(firebaseConfig.geminiApiKey);
-        // Test the Gemini client
-        const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-        console.log('Gemini AI initialized successfully with model:', model);
-    }
-} catch (error) {
-    console.error('Error initializing Gemini AI:', error);
-}
-
-try {
-    auth = getAuth(app);
-    db = getFirestore(app);
-    console.log('Firebase initialized successfully');
-} catch (error) {
-    console.error('Firebase initialization error:', error);
-    // Handle the error appropriately in your app
-}
-
 // --- Main App Component ---
+// Gemini AI Provider Component
+function GeminiAIProvider({ children }) {
+    const [genAI, setGenAI] = useState(null);
+    const [isInitialized, setIsInitialized] = useState(false);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+        const initializeGemini = async () => {
+            if (!geminiApiKey) {
+                setError('Gemini API key is missing. Please set REACT_APP_GEMINI_API_KEY in your .env file');
+                return;
+            }
+
+            try {
+                const client = new GoogleGenerativeAI(geminiApiKey);
+                // Test the client with a simple model
+                await client.getGenerativeModel({ model: "gemini-pro" });
+                setGenAI(client);
+                setIsInitialized(true);
+                console.log('Gemini AI initialized successfully');
+            } catch (err) {
+                console.error('Error initializing Gemini AI:', err);
+                setError(`Failed to initialize Gemini AI: ${err.message}`);
+            }
+        };
+
+        initializeGemini();
+    }, []);
+
+    return (
+        <GeminiAIContext.Provider value={{ genAI, isInitialized, error }}>
+            {children}
+        </GeminiAIContext.Provider>
+    );
+}
+
+// Custom hook to use Gemini AI
+const useGeminiAI = () => {
+    const context = React.useContext(GeminiAIContext);
+    if (context === undefined) {
+        throw new Error('useGeminiAI must be used within a GeminiAIProvider');
+    }
+    return context;
+};
+
 export default function App() {
     console.log('App component rendering...');
     // --- State Management ---
@@ -86,11 +115,6 @@ export default function App() {
     const [user, setUser] = useState(null); // Current authenticated user
     const [userData, setUserData] = useState(null); // User data from Firestore
     const [isAuthReady, setIsAuthReady] = useState(false); // Tracks if auth state has been checked
-
-    const [auth, setAuth] = useState(null);
-    const [db, setDb] = useState(null);
-    // Custom model analysis state (commented out as it's not currently used)
-    // const [analyzeWithCustomModel] = useState(null);
     
     console.log('Current page:', page);
     console.log('Auth state:', { user, isAuthReady });
@@ -126,7 +150,7 @@ export default function App() {
                 const unsubscribe = onAuthStateChanged(authInstance, async (currentUser) => {
                     if (currentUser && !currentUser.isAnonymous) {
                         setUser(currentUser);
-                        const userDocRef = doc(dbInstance, `/artifacts/${appId}/users`, currentUser.uid);
+                        const userDocRef = doc(dbInstance, `/artifacts/${firebaseConfig.appId}/users`, currentUser.uid);
                         const userDocSnap = await getDoc(userDocRef);
                         if (userDocSnap.exists()) {
                             setUserData(userDocSnap.data());
@@ -199,13 +223,15 @@ export default function App() {
     };
 
     return (
-        <div className="min-h-screen font-sans bg-gray-100">
-            <Navbar setPage={setPage} user={user} userData={userData} />
-            <main className="p-4 md:p-8">
-                {renderPage()}
-            </main>
-            <Footer />
-        </div>
+        <GeminiAIProvider>
+            <div className="min-h-screen font-sans bg-gray-100">
+                <Navbar setPage={setPage} user={user} userData={userData} />
+                <main className="p-4 md:p-8">
+                    {renderPage()}
+                </main>
+                <Footer />
+            </div>
+        </GeminiAIProvider>
     );
 }
 
@@ -294,7 +320,7 @@ function ShopPage({ db }) {
     useEffect(() => {
         if (!db) return;
         
-        const productsCollection = collection(db, `artifacts/${appId}/public/data/products`);
+        const productsCollection = collection(db, `artifacts/${firebaseConfig.appId}/public/data/products`);
         const q = query(productsCollection, where("isApproved", "==", true));
 
         const unsubscribe = onSnapshot(q, (querySnapshot) => {
@@ -444,7 +470,7 @@ function BecomeSellerPage({ db, user, userData, setPage }) {
         }
 
         try {
-            const sellerRequestRef = collection(db, `/artifacts/${appId}/public/data/sellerRequests`);
+            const sellerRequestRef = collection(db, `/artifacts/${firebaseConfig.appId}/public/data/sellerRequests`);
             const q = query(sellerRequestRef, where("uid", "==", user.uid));
             const existingRequests = await getDocs(q);
 
@@ -523,7 +549,7 @@ function SellerDashboardPage({ db, user }) {
     const fetchProducts = useCallback(() => {
         if (!db || !user) return;
         setLoading(true);
-        const productsCollection = collection(db, `/artifacts/${appId}/public/data/products`);
+        const productsCollection = collection(db, `/artifacts/${firebaseConfig.appId}/public/data/products`);
         const q = query(productsCollection, where("sellerId", "==", user.uid));
         
         const unsubscribe = onSnapshot(q, (querySnapshot) => {
@@ -633,7 +659,7 @@ function SellerDashboardPage({ db, user }) {
             // In a real app, you would upload the image to a storage service here
             // and get a permanent URL before saving to the database
             
-            await addDoc(collection(db, `/artifacts/${appId}/public/data/products`), productData);
+            await addDoc(collection(db, `/artifacts/${firebaseConfig.appId}/public/data/products`), productData);
             
             setFeedback('Product added successfully! It will appear in the shop after admin approval.');
             
@@ -751,6 +777,9 @@ function PlantAnalyzerPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [results, setResults] = useState(null);
     const [error, setError] = useState('');
+    
+    // Get the Gemini AI client from context
+    const { genAI, isInitialized, error: geminiError } = useGeminiAI();
 
     const handleImageChange = (event) => {
         const file = event.target.files[0];
@@ -777,14 +806,16 @@ function PlantAnalyzerPage() {
             return;
         }
 
+        if (!isInitialized) {
+            setError(geminiError || 'Gemini AI is still initializing. Please try again in a moment.');
+            return;
+        }
+
         setIsLoading(true);
         setError('');
         setResults(null);
 
         try {
-            if (!genAI) {
-                throw new Error('Gemini AI client is not initialized');
-            }
 
             // Get the generative model - using the latest gemini-1.5-flash model
             const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });

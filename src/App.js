@@ -142,10 +142,6 @@ export default function App() {
                 const dbInstance = getFirestore(app);
                 console.log('Firestore initialized');
                 
-                // Set auth and db instances in state
-                setAuth(authInstance);
-                setDb(dbInstance);
-                
                 console.log('Setting up auth state listener...');
                 const unsubscribe = onAuthStateChanged(authInstance, async (currentUser) => {
                     if (currentUser && !currentUser.isAnonymous) {
@@ -230,8 +226,30 @@ export default function App() {
                     {renderPage()}
                 </main>
                 <Footer />
+                {process.env.NODE_ENV === 'development' && <EnvDebug />}
             </div>
         </GeminiAIProvider>
+    );
+}
+
+// Debug component to show environment variables
+function EnvDebug() {
+    return (
+        <div style={{ 
+            position: 'fixed', 
+            bottom: '10px', 
+            right: '10px', 
+            background: 'rgba(0,0,0,0.7)', 
+            color: 'white', 
+            padding: '10px', 
+            borderRadius: '5px',
+            fontSize: '12px',
+            zIndex: 1000
+        }}>
+            <div>ENV Vars:</div>
+            <div>Gemini Key: {process.env.REACT_APP_GEMINI_API_KEY ? '✅ Set' : '❌ Missing'}</div>
+            <div>Firebase App ID: {process.env.REACT_APP_FIREBASE_APP_ID ? '✅ Set' : '❌ Missing'}</div>
+        </div>
     );
 }
 

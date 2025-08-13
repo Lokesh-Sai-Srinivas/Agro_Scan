@@ -1,0 +1,48 @@
+services:
+  # Frontend service
+  - type: web
+    name: agroscan-frontend
+    env: node
+    build:
+      dockerfile: Dockerfile
+    envVars:
+      - key: REACT_APP_BACKEND_URL
+        sync: false
+      - key: REACT_APP_FIREBASE_API_KEY
+        sync: false
+      - key: REACT_APP_FIREBASE_AUTH_DOMAIN
+        sync: false
+      - key: REACT_APP_FIREBASE_PROJECT_ID
+        sync: false
+      - key: REACT_APP_FIREBASE_STORAGE_BUCKET
+        sync: false
+      - key: REACT_APP_FIREBASE_MESSAGING_SENDER_ID
+        sync: false
+      - key: REACT_APP_FIREBASE_APP_ID
+        sync: false
+      - key: REACT_APP_FIREBASE_MEASUREMENT_ID
+        sync: false
+      - key: REACT_APP_GEMINI_API_KEY
+        sync: false
+    routes:
+      - type: rewrite
+        source: /
+        destination: /
+    healthCheckPath: /
+    autoDeploy: true
+
+  # Backend service
+  - type: web
+    name: agroscan-backend
+    env: python
+    build:
+      dockerfile: backend/Dockerfile
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9
+      - key: PORT
+        value: 8000
+    plan: free
+    numInstances: 1
+    healthCheckPath: /docs
+    autoDeploy: true
